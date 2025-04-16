@@ -3,6 +3,7 @@ from flask import Flask, render_template, jsonify, request  # Framework web e ro
 import requests  # Para requisições HTTP à API externa
 import heapq     # Para uso do heap (estrutura eficiente de ordenação parcial)
 import time      # Para introduzir delays simulando resposta do servidor
+import os        # Para acesso a variáveis de ambiente (como porta de execução)
 
 # cria a aplicação Flask
 app = Flask(__name__)
@@ -10,17 +11,18 @@ app = Flask(__name__)
 # -----------------------------------------------------------------------------
 # 1) AUTENTICAÇÃO - obtém token de acesso para consumir a API protegida
 # -----------------------------------------------------------------------------
-# Solicita token de autenticação usando client_credentials
-# Retorna o access_token se a requisição for bem-sucedida
-
 def obter_token():
+    # URL do servidor de autenticação
     url_token = "https://sso-catalogo.redeancora.com.br/connect/token"
+    # Cabeçalhos da requisição
     headers_token = {"Content-Type": "application/x-www-form-urlencoded"}
+    # Dados de autenticação
     data_token = {
         "grant_type": "client_credentials",
         "client_id": "65tvh6rvn4d7uer3hqqm2p8k2pvnm5wx",
         "client_secret": "9Gt2dBRFTUgunSeRPqEFxwNgAfjNUPLP5EBvXKCn"
     }
+    # Faz requisição POST para obter o token
     response = requests.post(url_token, headers=headers_token, data=data_token, verify=False)
     if response.status_code == 200:
         return response.json().get('access_token')
@@ -29,20 +31,16 @@ def obter_token():
 # -----------------------------------------------------------------------------
 # 2) FUNÇÕES AUXILIARES
 # -----------------------------------------------------------------------------
-
-# Extrai o nome do produto, lidando com diferentes formatos de dicionário
-
 def get_nome(prod):
+    # Extrai o nome do produto, tratando diferentes estruturas do dicionário
     if isinstance(prod, dict):
         if "data" in prod and isinstance(prod["data"], dict):
             return (prod["data"].get("nomeProduto") or "").lower()
         return (prod.get("nomeProduto") or "").lower()
     return ""
 
-# Extrai um valor numérico de um campo do produto, com fallback para 0
-# Essencial para ordenação por critérios como potência ou ano
-
 def get_numeric(prod, key):
+    # Extrai valor numérico seguro de um campo do produto
     try:
         if isinstance(prod, dict):
             if "data" in prod and isinstance(prod["data"], dict):
@@ -52,11 +50,8 @@ def get_numeric(prod, key):
         return 0
     return 0
 
-# IMPLEMENTAÇÃO EXIGIDA PELO PROFESSOR
-# Algoritmo Quick Sort - ordenação de lista de produtos
-# Pode ordenar crescente ou decrescente, baseado em uma função de chave (key_func)
-
 def quick_sort(produtos, asc=True, key_func=get_nome):
+    # Implementação de Quick Sort, usada no backend como exigido
     if len(produtos) <= 1:
         return produtos
     pivot = produtos[len(produtos) // 2]
@@ -66,12 +61,8 @@ def quick_sort(produtos, asc=True, key_func=get_nome):
     right = [p for p in produtos if key_func(p) > pivot_key]
     return quick_sort(left, asc, key_func) + middle + quick_sort(right, asc, key_func) if asc else quick_sort(right, asc, key_func) + middle + quick_sort(left, asc, key_func)
 
-# IMPLEMENTAÇÃO EXIGIDA PELO PROFESSOR
-# Função para buscar produtos na API, retornando dados paginados
-# Permite integração com o front para busca e autocomplete
-# Resultado pode conter muitos produtos que são posteriormente ordenados ou filtrados
-
 def buscar_produtos(access_token, produto, pagina=0, itens_por_pagina=15):
+    # Faz busca de produtos na API externa
     api_url = "https://api-stg-catalogo.redeancora.com.br/superbusca/api/integracao/catalogo/produtos/query"
     api_headers = {
         "Authorization": f"Bearer {access_token}",
@@ -91,55 +82,46 @@ def buscar_produtos(access_token, produto, pagina=0, itens_por_pagina=15):
             return []
     return []
 
-# IMPLEMENTAÇÃO EXIGIDA PELO PROFESSOR
-# Usa heapq para obter k maiores ou menores elementos com base em um critério
-# Os elementos retornados são reordenados com quick_sort para melhor apresentação
-
 def get_k_elements(produtos, k, key, largest=True):
+    # Usa heap para encontrar k maiores ou menores e ordena com quick_sort
     selecionados = heapq.nlargest(k, produtos, key=lambda p: get_numeric(p, key)) if largest else heapq.nsmallest(k, produtos, key=lambda p: get_numeric(p, key))
     return quick_sort(selecionados, asc=not largest, key_func=lambda p: get_numeric(p, key))
 
 # -----------------------------------------------------------------------------
-# 3) ROTA PRINCIPAL - rota raiz da aplicação
+# 3) ROTA PRINCIPAL
 # -----------------------------------------------------------------------------
 @app.route("/")
 def index():
-    return render_template("index.html")
+    # Rota base apenas para teste de funcionamento
+    return "API Flask em funcionamento. Frontend deve ser acessado separadamente."
 
 # -----------------------------------------------------------------------------
-# 4) ROTA /buscar - IMPLEMENTAÇÃO EXIGIDA PELO PROFESSOR
-# Recebe um termo de busca, faz a requisição na API, ordena com quick_sort e retorna ao front
-# Ordenação crescente ou decrescente é definida pelo parâmetro 'ordem'
+# 4) ROTA /buscar - busca produtos e ordena usando quick_sort
 # -----------------------------------------------------------------------------
 @app.route("/buscar", methods=["GET"])
 def buscar():
     try:
+        # Extrai parâmetros da URL
         termo = request.args.get("produto", "").strip().lower()
         if not termo:
             return jsonify({"error": "Nome do produto nao informado"}), 400
 
-        time.sleep(0.002)  # Simula delay de rede
+        time.sleep(0.002)  # Simula leve delay de processamento
 
-        try:
-            pagina_ui = int(request.args.get("pagina", "1"))
-        except ValueError:
-            pagina_ui = 1
+        pagina_ui = int(request.args.get("pagina", "1"))
         pagina = pagina_ui - 1
-
-        try:
-            itens_por_pagina = int(request.args.get("itensPorPagina", "15"))
-        except ValueError:
-            itens_por_pagina = 15
-
+        itens_por_pagina = int(request.args.get("itensPorPagina", "15"))
         ordem = request.args.get("ordem", "asc").strip().lower()
         asc = ordem == "asc"
 
+        # Autentica e busca dados da API
         token = obter_token()
         if not token:
             return jsonify({"error": "Erro ao obter token"}), 500
 
         produtos = buscar_produtos(token, termo, pagina, itens_por_pagina)
 
+        # Ordena com quick_sort (implementação própria)
         if len(produtos) > 1:
             produtos = quick_sort(produtos, asc)
 
@@ -148,18 +130,17 @@ def buscar():
         return jsonify({"error": "Internal server error", "message": str(e)}), 500
 
 # -----------------------------------------------------------------------------
-# 5) ROTA /autocomplete - IMPLEMENTAÇÃO EXIGIDA PELO PROFESSOR
-# Utiliza a BST internamente para armazenar os nomes dos produtos e sugerir pelo prefixo
-# A árvore é construída com os nomes e filtrada conforme prefixo digitado
+# 5) ROTA /autocomplete - usa árvore binária para sugerir nomes
 # -----------------------------------------------------------------------------
 @app.route("/autocomplete", methods=["GET"])
 def autocomplete():
     try:
+        # Lê o prefixo buscado no campo de autocomplete
         prefix = request.args.get("prefix", "").strip().lower()
         if not prefix:
             return jsonify([])
 
-        time.sleep(0.002)
+        time.sleep(0.002)  # Simula leve delay
 
         token = obter_token()
         if not token:
@@ -176,9 +157,7 @@ def autocomplete():
         return jsonify({"error": "Internal server error", "message": str(e)}), 500
 
 # -----------------------------------------------------------------------------
-# 6) ROTA /heap - IMPLEMENTAÇÃO EXIGIDA PELO PROFESSOR
-# Retorna os K maiores ou menores produtos de acordo com o campo (como hp ou ano)
-# Utiliza heapq e quick_sort para garantir ordenação eficiente e visível no front
+# 6) ROTA /heap - retorna os K maiores ou menores baseado em campo
 # -----------------------------------------------------------------------------
 @app.route("/heap", methods=["GET"])
 def heap_endpoint():
@@ -187,11 +166,7 @@ def heap_endpoint():
         if not produto:
             return jsonify({"error": "Nome do produto nao informado"}), 400
 
-        try:
-            k = int(request.args.get("k", "5"))
-        except ValueError:
-            k = 5
-
+        k = int(request.args.get("k", "5"))
         largest = request.args.get("modo", "maior").lower() == "maior"
         key_field = request.args.get("criterio", "hp").strip()
         marca = request.args.get("marca", "").strip().lower()
@@ -208,7 +183,8 @@ def heap_endpoint():
         return jsonify({"error": "Internal server error", "message": str(e)}), 500
 
 # -----------------------------------------------------------------------------
-# 7) EXECUÇÃO DA APLICAÇÃO - inicia o servidor Flask em modo debug
+# 7) EXECUÇÃO - inicia o servidor com porta dinâmica para compatibilidade com Railway
 # -----------------------------------------------------------------------------
 if __name__ == "__main__":
-    app.run(debug=True)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(debug=True, host="0.0.0.0", port=port)
