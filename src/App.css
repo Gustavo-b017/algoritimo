@@ -1,0 +1,74 @@
+body {
+  font-family: Arial, sans-serif;
+  margin: 20px;
+}
+
+/* Estilos para o autocomplete */
+#sugestoes {
+  position: absolute;
+  background: #f9f9f9;
+  border: 1px solid #ccc;
+  width: 300px;
+  display: none;
+  z-index: 10;
+  padding: 0;
+  list-style: none;
+}
+
+#sugestoes {
+  display: block !important;
+}
+
+
+#sugestoes li {
+  padding: 8px;
+  cursor: pointer;
+}
+
+#sugestoes li:hover {
+  background: #ddd;
+}
+
+/* Esconde a seção do Heap inicialmente */
+#secao-heap {
+  display: none;
+  margin-top: 20px;
+}
+.autocomplete-list {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: #fff;
+  border: 1px solid #ccc;
+  border-top: none;
+  border-radius: 0 0 4px 4px;
+  max-height: 250px;
+  overflow-y: auto;
+  z-index: 9999;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.autocomplete-item {
+  padding: 8px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid #eee;
+}
+
+.autocomplete-item:hover {
+  background-color: #f0f0f0;
+}
+
+.autocomplete-loading {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  background: #fff;
+  border: 1px solid #ccc;
+  width: 100%;
+  padding: 8px;
+  z-index: 9999;
+}
